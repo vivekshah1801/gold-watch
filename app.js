@@ -5,11 +5,11 @@
    CONSTANTS
 ═══════════════════════════════════════════════ */
 const API_URL = 'https://api.zerodhafundhouse.com/api/v1/index/historical?code=GOLD995&duration=6m&aggregate=false';
-const PROXY_PRIMARY  = 'https://api.allorigins.win/get?url=';
-const PROXY_FALLBACK = 'https://corsproxy.io/?url=';
+const PROXY_PRIMARY  = 'https://api.allorigins.win/raw?url=';
+const PROXY_FALLBACK = 'https://api.allorigins.win/get?url=';
 const PROXY_EXTRA    = [
-  'https://api.codetabs.com/v1/proxy?quest=',
-  'https://thingproxy.freeboard.io/fetch/'
+  'https://proxy.cors.sh/',
+  'https://corsproxy.io/?url='
 ];
 const STORAGE_KEY = 'goldwatch_v1';
 const MAX_LOG = 20;
@@ -91,11 +91,12 @@ async function fetchWithProxy(proxyBase) {
 
   const json = await res.json();
 
-  /* allorigins wraps in {contents: "...string..."} */
-  if (json.contents !== undefined) {
-    return JSON.parse(json.contents);
+  /* allorigins /get wraps response in {contents: "...string..."} */
+  if (json && json.contents !== undefined) {
+    const parsed = JSON.parse(json.contents);
+    return parsed;
   }
-  /* corsproxy.io returns raw JSON */
+  /* allorigins /raw, corsproxy.io, cors.sh return raw JSON */
   return json;
 }
 
@@ -128,15 +129,22 @@ async function fetchGoldData() {
 }
 
 function parseAndStore(data) {
-  /* Zerodha response: { data: { candles: [[date, price], ...] } }
-     or { data: [{date, close}] } — handle both shapes */
+  /* Actual API shape: { data: { points: [{ts, val}] }, success: true }
+     Also handle legacy shapes: { data: { candles: [[date,...]] } }
+     and { data: [{date, close}] } */
   let points = [];
 
   if (data && data.data) {
     const d = data.data;
-    if (Array.isArray(d.candles)) {
-      /* OHLCV = [date, open, high, low, close, vol] → use close (index 4)
-         Simple = [date, price]                      → use index 1          */
+
+    /* Primary shape: {points: [{ts, val}]} */
+    if (Array.isArray(d.points)) {
+      points = d.points.map(c => ({
+        date: c.ts || c.date || c.timestamp,
+        price: parseFloat(c.val || c.close || c.price || c.nav)
+      }));
+    } else if (Array.isArray(d.candles)) {
+      /* Legacy OHLCV candles: [date, open, high, low, close, vol] → close */
       points = d.candles.map(c => ({
         date: c[0],
         price: parseFloat(c.length >= 5 ? c[4] : c[1])
@@ -144,7 +152,7 @@ function parseAndStore(data) {
     } else if (Array.isArray(d)) {
       points = d.map(c => {
         if (Array.isArray(c)) return { date: c[0], price: parseFloat(c.length >= 5 ? c[4] : c[1]) };
-        return { date: c.date || c.timestamp, price: parseFloat(c.close || c.price || c.nav) };
+        return { date: c.ts || c.date || c.timestamp, price: parseFloat(c.val || c.close || c.price || c.nav) };
       });
     }
   }
