@@ -82,6 +82,18 @@ self.addEventListener('message', e => {
     );
   }
 
+  if (type === 'DEBUG_PING') {
+    const price = e.data.price;
+    const time  = new Date(e.data.ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    console.log('[SW] DEBUG_PING received, price:', price);
+    fireNotification(
+      '🐛 Gold Watch Debug',
+      `GOLD995 = ₹${fmt(price)} at ${time}`,
+      'debug-ping'
+    ).catch(err => console.error('[SW] Debug ping notification failed:', err));
+    return;
+  }
+
   if (type === 'NOTIFY_TEST') {
     fireNotification('Gold Watch ✓', 'Push notifications are working!', 'test')
       .then(() => console.log('[SW] Test notification sent'))

@@ -13,15 +13,17 @@ const CFG_KEY     = '/gw-config';
    STATE
 ═══════════════════════════════════════════════ */
 let state = {
-  prices:       [],
-  lastPrice:    null,
-  prevPrice:    null,
-  lastFetch:    null,
-  thresholds:   { priceAbove: '', priceBelow: '', pctRise: '', pctDrop: '' },
-  interval:     60,
+  prices:        [],
+  lastPrice:     null,
+  prevPrice:     null,
+  lastFetch:     null,
+  thresholds:    { priceAbove: '', priceBelow: '', pctRise: '', pctDrop: '' },
+  interval:      60,
   notifyEnabled: false,
-  activeRange:  '3M',
-  pollTimer:    null
+  debugMode:     false,
+  activeRange:   '3M',
+  pollTimer:     null,
+  debugTimer:    null
 };
 
 let chart = null;
@@ -38,7 +40,8 @@ function saveState() {
       lastFetch:     state.lastFetch,
       thresholds:    state.thresholds,
       interval:      state.interval,
-      notifyEnabled: state.notifyEnabled
+      notifyEnabled: state.notifyEnabled,
+      debugMode:     state.debugMode
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -382,6 +385,34 @@ async function registerPeriodicSync(reg) {
 }
 
 /* ═══════════════════════════════════════════════
+   DEBUG MODE — ping every 3 min with live price
+═══════════════════════════════════════════════ */
+function startDebugPing() {
+  stopDebugPing();
+  sendDebugPing(); /* immediate first ping */
+  state.debugTimer = setInterval(sendDebugPing, 3 * 60 * 1000);
+}
+
+function stopDebugPing() {
+  if (state.debugTimer) { clearInterval(state.debugTimer); state.debugTimer = null; }
+}
+
+async function sendDebugPing() {
+  if (!state.debugMode) return;
+  console.log('[App][Debug] Sending debug ping notification');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    reg.active.postMessage({
+      type:  'DEBUG_PING',
+      price: state.lastPrice,
+      ts:    Date.now()
+    });
+  } catch (e) {
+    console.error('[App][Debug] sendDebugPing failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════
    EVENT WIRING
 ═══════════════════════════════════════════════ */
 function wireEvents() {
@@ -446,6 +477,28 @@ function wireEvents() {
     updateToggleUI();
   });
 
+  el('toggleDebug').addEventListener('click', async () => {
+    if (!state.debugMode) {
+      if (!state.notifyEnabled) {
+        const granted = await requestNotificationPermission();
+        if (!granted) {
+          console.warn('[App] Need notification permission for debug mode');
+          return;
+        }
+        state.notifyEnabled = true;
+      }
+      state.debugMode = true;
+      startDebugPing();
+      console.log('[App] Debug mode ON — pinging every 3 min');
+    } else {
+      state.debugMode = false;
+      stopDebugPing();
+      console.log('[App] Debug mode OFF');
+    }
+    saveState();
+    updateToggleUI();
+  });
+
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
@@ -458,9 +511,15 @@ function wireEvents() {
 
 function updateToggleUI() {
   const toggle = el('toggleNotify');
-  if (!toggle) return;
-  toggle.classList.toggle('on', state.notifyEnabled);
-  el('notifyLabel').textContent = state.notifyEnabled ? 'Notifications on' : 'Notifications off';
+  if (toggle) {
+    toggle.classList.toggle('on', state.notifyEnabled);
+    el('notifyLabel').textContent = state.notifyEnabled ? 'Notifications on' : 'Notifications off';
+  }
+  const dbg = el('toggleDebug');
+  if (dbg) {
+    dbg.classList.toggle('on', state.debugMode);
+    el('debugLabel').textContent = state.debugMode ? 'Debug mode on' : 'Debug mode off';
+  }
 }
 
 function showSavedFeedback() {
@@ -555,4 +614,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!chart) buildChart();
 
   startPolling();
+
+  /* Resume debug mode if it was on before */
+  if (state.debugMode && state.notifyEnabled) {
+    console.log('[App] Resuming debug mode from saved state');
+    startDebugPing();
+  }
 });

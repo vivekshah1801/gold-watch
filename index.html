@@ -607,6 +607,18 @@
           <div class="toggle-knob"></div>
         </div>
       </div>
+
+      <!-- Debug mode -->
+      <div class="notify-row">
+        <div class="notify-info">
+          <span id="debugLabel">Debug mode off</span>
+          <span class="notify-sub">Ping every 3 min with live price</span>
+        </div>
+        <div class="toggle-btn" id="toggleDebug" role="switch" aria-checked="false" tabindex="0"
+             aria-label="Toggle debug notifications">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Footer -->
@@ -635,6 +647,12 @@
 
 <!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  /* Global Chart.js defaults — no dots, no color box in tooltip */
+  Chart.defaults.elements.point.radius        = 0;
+  Chart.defaults.elements.point.hoverRadius   = 4;
+  Chart.defaults.plugins.tooltip.displayColors = false;
+</script>
 
 <!-- Main app -->
 <script src="app.js"></script>
