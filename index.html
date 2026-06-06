@@ -368,32 +368,6 @@
     }
     .toggle-btn.on .toggle-knob { left: 22px; background: white; }
 
-    /* ── Activity log ────────────────────────── */
-    .log-list { display: flex; flex-direction: column; }
-
-    .log-item {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 8px 0;
-      border-bottom: 0.5px solid var(--border);
-    }
-    .log-item:last-child { border-bottom: none; padding-bottom: 0; }
-
-    .log-icon {
-      width: 26px; height: 26px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      margin-top: 1px;
-      font-size: 13px;
-    }
-    .log-icon.ok    { background: rgba(76,175,130,0.12); color: var(--up); }
-    .log-icon.warn  { background: rgba(212,149,74,0.12); color: var(--warn); }
-    .log-icon.error { background: rgba(224,92,92,0.12);  color: var(--down); }
-
-    .log-msg  { font-size: 12px; line-height: 1.45; color: var(--text-1); }
-    .log-time { font-size: 10px; font-family: var(--font-mono); color: var(--text-2); margin-top: 2px; }
-    .log-empty { font-size: 12px; font-family: var(--font-mono); color: var(--text-3); padding: 8px 0; }
-
     /* ── Bottom bar ──────────────────────────── */
     .bottom-bar {
       display: flex; gap: 8px;
@@ -635,17 +609,6 @@
       </div>
     </div>
 
-    <!-- Activity log -->
-    <div class="card" role="region" aria-label="Activity log">
-      <div class="card-title">
-        <i class="ti ti-history" aria-hidden="true"></i>
-        Activity log
-      </div>
-      <div class="log-list" id="logList" aria-live="polite">
-        <div class="log-empty">No activity yet — fetching data…</div>
-      </div>
-    </div>
-
     <!-- Footer -->
     <footer class="footer" role="contentinfo">
       Made with 🤖 by Claude<br>
@@ -653,7 +616,7 @@
       <div class="small" style="margin-top: 8px; font-style: italic;">
         Send him a <a href="https://linkedin.com/in/vivekshah1801" target="_blank" rel="noopener">Hi</a>. He likes to talk to AI and Humans.
       </div>
-      <div class="version">v1.0.3</div>
+      <div class="version">v3.0.0</div>
     </footer>
 
   </main>
@@ -680,7 +643,7 @@
 <script>
 (function(){
   let deferredPrompt;
-  const banner = document.getElementById('installBanner');
+  const banner     = document.getElementById('installBanner');
   const btnInstall = document.getElementById('btnInstall');
   const btnDismiss = document.getElementById('btnDismiss');
 
@@ -701,23 +664,6 @@
   btnDismiss && btnDismiss.addEventListener('click', () => {
     if (banner) banner.style.display = 'none';
   });
-
-  /* Update chart axis labels based on current range */
-  function updateAxisLabels() {
-    const labelsEl = document.getElementById('chartAxisLabels');
-    if (!labelsEl || !window._goldPrices) return;
-    const pts = window._goldPrices;
-    if (!pts.length) return;
-    const indices = [0, Math.floor(pts.length/3), Math.floor(2*pts.length/3), pts.length-1];
-    const spans = labelsEl.querySelectorAll('span');
-    indices.forEach((idx, i) => {
-      if (spans[i] && pts[idx]) {
-        const d = new Date(pts[idx].date);
-        spans[i].textContent = d.toLocaleDateString('en-IN', {day:'numeric',month:'short'});
-      }
-    });
-  }
-  window._updateAxisLabels = updateAxisLabels;
 
   /* Keyboard toggle support */
   const tog = document.getElementById('toggleNotify');
