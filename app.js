@@ -1,16 +1,10 @@
-/* Gold Watch — app.js v1.0.3 */
+/* Gold Watch — app.js v2.0.0 */
 'use strict';
 
 /* ═══════════════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════════════ */
-const API_URL = 'https://api.zerodhafundhouse.com/api/v1/index/historical?code=GOLD995&duration=6m&aggregate=false';
-const PROXY_PRIMARY  = 'https://api.allorigins.win/raw?url=';
-const PROXY_FALLBACK = 'https://api.allorigins.win/get?url=';
-const PROXY_EXTRA    = [
-  'https://proxy.cors.sh/',
-  'https://corsproxy.io/?url='
-];
+const DATA_URL = './data.json';
 const STORAGE_KEY = 'goldwatch_v1';
 const MAX_LOG = 20;
 const INTERVALS = [30, 60, 120, 180, 240, 360, 720, 1440]; /* minutes */
@@ -82,43 +76,17 @@ function logEntry(type, msg) {
 }
 
 /* ═══════════════════════════════════════════════
-   API FETCH (primary + fallback proxy)
+   API FETCH (same-origin data.json, built by CI)
 ═══════════════════════════════════════════════ */
-async function fetchWithProxy(proxyBase) {
-  const url = proxyBase + encodeURIComponent(API_URL);
-  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-
-  const json = await res.json();
-
-  /* allorigins /get wraps response in {contents: "...string..."} */
-  if (json && json.contents !== undefined) {
-    const parsed = JSON.parse(json.contents);
-    return parsed;
-  }
-  /* allorigins /raw, corsproxy.io, cors.sh return raw JSON */
-  return json;
-}
-
 async function fetchGoldData() {
   setFetchStatus('loading');
   try {
-    let data;
-    const proxies = [PROXY_PRIMARY, PROXY_FALLBACK, ...PROXY_EXTRA];
-    let lastErr;
-    for (const proxy of proxies) {
-      try {
-        data = await fetchWithProxy(proxy);
-        logEntry('ok', 'Fetched via proxy: ' + new URL(proxy).hostname);
-        break;
-      } catch (e) {
-        console.warn('Proxy failed (' + proxy + '):', e);
-        lastErr = e;
-      }
-    }
-    if (!data) throw new Error('All proxies failed: ' + (lastErr ? lastErr.message : 'unknown'));
-
+    const res = await fetch(DATA_URL + '?t=' + Date.now(), { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error === 'fetch_failed') throw new Error('API fetch failed on server');
     parseAndStore(data);
+    logEntry('ok', 'Data refreshed');
     setFetchStatus('ok');
     return true;
   } catch (err) {

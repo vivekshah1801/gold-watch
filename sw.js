@@ -1,5 +1,5 @@
-/* Gold Watch — Service Worker v1.0.4 */
-const CACHE = 'gold-watch-v1.0.4';
+/* Gold Watch — Service Worker v2.0.0 */
+const CACHE = 'gold-watch-v2.0.0';
 const STATIC = ['/', '/index.html'];
 
 /* ── Install ─────────────────────────────────────── */
@@ -21,7 +21,8 @@ self.addEventListener('activate', e => {
 /* ── Fetch (network-first for API, cache for static) */
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (url.hostname.includes('allorigins') || url.hostname.includes('zerodhafundhouse') ||
+  if (url.pathname.endsWith('data.json') ||
+      url.hostname.includes('allorigins') || url.hostname.includes('zerodhafundhouse') ||
       url.hostname.includes('corsproxy') || url.hostname.includes('codetabs') ||
       url.hostname.includes('thingproxy') || url.hostname.includes('cors.sh') ||
       url.hostname.includes('proxy.cors')) {

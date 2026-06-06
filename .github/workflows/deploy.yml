@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '*/30 * * * *'  # Refresh data every 30 minutes
   workflow_dispatch:
 
 permissions:
@@ -23,6 +25,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Fetch Gold Data
+        run: |
+          curl -sf \
+            -H "Accept: application/json" \
+            "https://api.zerodhafundhouse.com/api/v1/index/historical?code=GOLD995&duration=6m&aggregate=false" \
+            -o data.json \
+          || echo '{"error":"fetch_failed"}' > data.json
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
