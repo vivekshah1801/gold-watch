@@ -138,12 +138,10 @@ function parseAndStore(data) {
   state.prices = points;
   state.lastPrice = points[points.length - 1].price;
   state.lastFetch = Date.now();
-  window._goldPrices = points; /* expose for axis label updater */
 
   saveState();
   renderAll();
   checkThresholds();
-  if (window._updateAxisLabels) window._updateAxisLabels();
 }
 
 /* ═══════════════════════════════════════════════
@@ -181,18 +179,20 @@ function checkThresholds() {
   });
 
   /* Tell SW to fire push notifications */
-  if (triggered.length > 0 && state.notifyEnabled && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'CHECK_ALERT',
-      price,
-      prevPrice: prev,
-      thresholds: {
-        priceAbove: t.priceAbove ? parseFloat(t.priceAbove) : null,
-        priceBelow: t.priceBelow ? parseFloat(t.priceBelow) : null,
-        pctRise: t.pctRise ? parseFloat(t.pctRise) : null,
-        pctDrop: t.pctDrop ? parseFloat(t.pctDrop) : null
-      }
-    });
+  if (triggered.length > 0 && state.notifyEnabled) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.active && reg.active.postMessage({
+        type: 'CHECK_ALERT',
+        price,
+        prevPrice: prev,
+        thresholds: {
+          priceAbove: t.priceAbove ? parseFloat(t.priceAbove) : null,
+          priceBelow: t.priceBelow ? parseFloat(t.priceBelow) : null,
+          pctRise: t.pctRise ? parseFloat(t.pctRise) : null,
+          pctDrop: t.pctDrop ? parseFloat(t.pctDrop) : null
+        }
+      });
+    }).catch(() => {});
   }
 }
 
@@ -228,11 +228,10 @@ function buildChart() {
   const labels = pts.map(p => p.date);
   const data = pts.map(p => p.price);
 
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const lineColor = '#C8862A';
-  const fillColor = isDark ? 'rgba(200,134,42,0.10)' : 'rgba(200,134,42,0.07)';
-  const gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
-  const tickColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+  const lineColor = '#B8741A';
+  const fillColor = 'rgba(184,116,26,0.07)';
+  const gridColor = 'rgba(0,0,0,0.05)';
+  const tickColor = 'rgba(0,0,0,0.35)';
 
   if (chart) chart.destroy();
   chart = new Chart(ctx, {
@@ -244,7 +243,7 @@ function buildChart() {
         borderColor: lineColor,
         borderWidth: 1.5,
         pointRadius: 0,
-        pointHoverRadius: 5,
+        pointHoverRadius: 4,
         pointHoverBackgroundColor: lineColor,
         fill: true,
         backgroundColor: fillColor,
@@ -255,14 +254,15 @@ function buildChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      elements: { point: { radius: 0 } },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
-          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          backgroundColor: '#ffffff',
+          borderColor: 'rgba(0,0,0,0.1)',
           borderWidth: 1,
-          titleColor: isDark ? '#aaa' : '#666',
-          bodyColor: isDark ? '#f0f0f0' : '#111',
+          titleColor: '#7a7068',
+          bodyColor: '#1c1814',
           bodyFont: { size: 13, weight: '500' },
           padding: 10,
           callbacks: {
@@ -289,6 +289,7 @@ function buildChart() {
       }
     }
   });
+  updateAxisLabels();
 }
 
 function updateChart() {
@@ -297,6 +298,21 @@ function updateChart() {
   chart.data.labels = pts.map(p => p.date);
   chart.data.datasets[0].data = pts.map(p => p.price);
   chart.update('active');
+  updateAxisLabels();
+}
+
+function updateAxisLabels() {
+  const container = el('chartAxisLabels');
+  if (!container) return;
+  const pts = getFilteredPrices();
+  if (pts.length < 2) return;
+  const spans = container.querySelectorAll('span');
+  const count = spans.length;
+  /* Pick evenly-spaced indices */
+  spans.forEach((span, i) => {
+    const idx = Math.round(i * (pts.length - 1) / (count - 1));
+    span.textContent = fmtDateShort(pts[idx].date);
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -363,20 +379,21 @@ function setFetchStatus(s) {
   const pill = el('statusPill');
   const dot  = el('statusDot');
   const spin = el('spinIcon');
+  const txt  = el('statusText');
   if (!pill) return;
   if (s === 'loading') {
     pill.className = 'status-pill loading';
-    pill.querySelector('span').textContent = 'Fetching…';
+    if (txt)  txt.textContent = 'Fetching…';
     if (spin) spin.style.display = 'inline';
     if (dot)  dot.style.display = 'none';
   } else if (s === 'ok') {
     pill.className = 'status-pill ok';
-    pill.querySelector('span').textContent = 'Watching';
+    if (txt)  txt.textContent = 'Watching';
     if (spin) spin.style.display = 'none';
     if (dot)  { dot.style.display = 'inline-block'; dot.className = 'status-dot ok'; }
   } else {
     pill.className = 'status-pill error';
-    pill.querySelector('span').textContent = 'Error';
+    if (txt)  txt.textContent = 'Error';
     if (spin) spin.style.display = 'none';
     if (dot)  { dot.style.display = 'inline-block'; dot.className = 'status-dot error'; }
   }
@@ -424,9 +441,12 @@ function wireEvents() {
       const granted = await requestNotificationPermission();
       if (granted) {
         state.notifyEnabled = true;
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({ type: 'NOTIFY_TEST' });
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          reg.active.postMessage({ type: 'NOTIFY_TEST' });
           logEntry('ok', 'Notifications enabled — test sent');
+        } catch (e) {
+          logEntry('warn', 'SW not ready: ' + e.message);
         }
       } else {
         logEntry('warn', 'Notification permission denied');
@@ -501,6 +521,12 @@ function fmt(n) {
 function fmtDate(str) {
   try {
     return new Date(str).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+  } catch { return str; }
+}
+
+function fmtDateShort(str) {
+  try {
+    return new Date(str).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   } catch { return str; }
 }
 
