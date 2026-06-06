@@ -5,8 +5,12 @@
    CONSTANTS
 ═══════════════════════════════════════════════ */
 const API_URL = 'https://api.zerodhafundhouse.com/api/v1/index/historical?code=GOLD995&duration=6m&aggregate=false';
-const PROXY_PRIMARY = 'https://api.allorigins.win/get?url=';
+const PROXY_PRIMARY  = 'https://api.allorigins.win/get?url=';
 const PROXY_FALLBACK = 'https://corsproxy.io/?url=';
+const PROXY_EXTRA    = [
+  'https://api.codetabs.com/v1/proxy?quest=',
+  'https://thingproxy.freeboard.io/fetch/'
+];
 const STORAGE_KEY = 'goldwatch_v1';
 const MAX_LOG = 20;
 const INTERVALS = [30, 60, 120, 180, 240, 360, 720, 1440]; /* minutes */
@@ -99,18 +103,19 @@ async function fetchGoldData() {
   setFetchStatus('loading');
   try {
     let data;
-    try {
-      data = await fetchWithProxy(PROXY_PRIMARY);
-      logEntry('ok', 'Fetched via primary proxy');
-    } catch (e1) {
-      console.warn('Primary proxy failed, trying fallback:', e1);
+    const proxies = [PROXY_PRIMARY, PROXY_FALLBACK, ...PROXY_EXTRA];
+    let lastErr;
+    for (const proxy of proxies) {
       try {
-        data = await fetchWithProxy(PROXY_FALLBACK);
-        logEntry('ok', 'Fetched via fallback proxy');
-      } catch (e2) {
-        throw new Error('Both proxies failed: ' + e2.message);
+        data = await fetchWithProxy(proxy);
+        logEntry('ok', 'Fetched via proxy: ' + new URL(proxy).hostname);
+        break;
+      } catch (e) {
+        console.warn('Proxy failed (' + proxy + '):', e);
+        lastErr = e;
       }
     }
+    if (!data) throw new Error('All proxies failed: ' + (lastErr ? lastErr.message : 'unknown'));
 
     parseAndStore(data);
     setFetchStatus('ok');
@@ -501,7 +506,7 @@ function populateUI() {
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    const reg = await navigator.serviceWorker.register('/sw.js');
+    const reg = await navigator.serviceWorker.register('./sw.js');
     console.log('Gold Watch SW registered:', reg.scope);
   } catch (e) {
     console.warn('SW registration failed:', e);
